@@ -1,0 +1,4 @@
+export const C = 6;
+console.log(2, 6, 6);
+console.log(5);
+console.log(6);

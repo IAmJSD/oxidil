@@ -1,0 +1,7 @@
+zero-for 0
+zero-while 0
+do-while 1
+invariant 86
+for-of 3,1,2
+for-in b,a,c
+side-invariant 6 3

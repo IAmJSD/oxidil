@@ -1,0 +1,25 @@
+[package]
+name = "oxidil"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+# --- oxc front-end, all PINNED to 0.134.0 (0.134.x needs Rust >=1.94; we are on 1.96) ---
+oxc_allocator = "=0.134.0"
+oxc_ast       = "=0.134.0"
+oxc_ast_visit = "=0.134.0"
+oxc_parser    = "=0.134.0"
+oxc_semantic  = "=0.134.0"
+oxc_traverse  = "=0.134.0"
+oxc_codegen   = "=0.134.0"
+oxc_span      = "=0.134.0"
+oxc_syntax    = "=0.134.0"
+oxc_ecmascript = "=0.134.0"
+oxc_mangler   = "=0.134.0"
+oxc_sourcemap = "=7.0.0"
+oxc_diagnostics = "=0.134.0"
+
+# --- non-oxc support ---
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"

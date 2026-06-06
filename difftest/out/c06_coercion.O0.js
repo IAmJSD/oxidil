@@ -1,0 +1,22 @@
+// typeof/coercion edge cases: +0/-0, NaN, "" + n, null/undefined
+console.log(Object.is(+0, -0));
+console.log(+0 === -0);
+console.log(1 / +0, 1 / -0);
+console.log(0 * -1);
+console.log(1 / (0 * -1));
+console.log("" + 0 * -1);
+console.log(NaN === NaN);
+console.log(typeof NaN);
+console.log("" + null, "" + undefined);
+console.log(null == undefined, null === undefined);
+console.log(typeof null, typeof undefined);
+console.log("" + 1 + 2, 1 + 2 + "");
+console.log([] + [], [] + {}, {} + []);
+console.log(+"", +"  ", +"0x10", +"1e3");
+console.log(typeof (() => {}), typeof function() {}, typeof class {});
+console.log(.1 + .2);
+console.log(9007199254740992);
+console.log(-0);
+console.log((-0).toString(), String(-0));
+var x = -0;
+console.log(x === 0, Object.is(x, -0));

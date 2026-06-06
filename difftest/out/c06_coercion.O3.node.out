@@ -1,0 +1,20 @@
+false
+true
+Infinity -Infinity
+-0
+-Infinity
+0
+false
+number
+null undefined
+true false
+object undefined
+12 3
+ [object Object] [object Object]
+0 0 16 1000
+function function function
+0.30000000000000004
+9007199254740992
+-0
+0 0
+true true

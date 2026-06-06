@@ -1,0 +1,12 @@
+finally
+a,catch:x
+fin0
+body0
+fin1
+body1
+fin2
+fin3
+body3
+fin4
+inner finally
+TypeError

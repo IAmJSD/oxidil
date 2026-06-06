@@ -1,0 +1,7 @@
+0:zero,one-or-less
+1:one-or-less
+2:two-or-three,default
+3:two-or-three,default
+4:four
+5:default
+num str other other
