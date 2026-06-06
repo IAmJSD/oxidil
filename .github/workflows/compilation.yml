@@ -1,0 +1,51 @@
+name: Compile on new release
+
+on: push
+
+jobs:
+  check-if-new-release:
+    name: Check if this is a new relase
+    outputs:
+      version: ${{ steps.version-get.outputs.VERSION }}
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - run: pip install toml
+      - uses: actions/checkout@v6
+      - name: Get the version
+        id: version-get
+        run: |
+          set -eo pipefail
+          VERSION=$(python -c "import toml; print('v' + toml.load('Cargo.toml')['package']['version'])")
+          if [ -n "$(git tag -l "$VERSION")" ]; then
+            echo "VERSION=" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
+  get-release-notes:
+    name: Get release notes
+    runs-on: ubuntu-24.04-arm
+    needs: check-if-new-release
+    if: needs.check-if-new-release.version != ''
+    outputs:
+      release-notes: ${{ steps.release-notes.outputs.RELEASE_NOTES }}
+    steps:
+      - name: Install git-cliff
+        run: |
+          set -eo pipefail
+          wget https://github.com/orhun/git-cliff/releases/download/v2.12.0/git-cliff-2.12.0-aarch64-unknown-linux-gnu.tar.gz
+          tar -xvzf git-cliff-2.12.0-aarch64-unknown-linux-gnu.tar.gz
+          sudo mv ./git-cliff-2.12.0/git-cliff /usr/local/bin/git-cliff
+          sudo chmod +x /usr/local/bin/git-cliff
+          rm git-cliff-2.12.0-aarch64-unknown-linux-gnu.tar.gz
+          rm -rf git-cliff-2.12.0
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Get release notes
+        id: release-notes
+        run: |
+          set -eo pipefail
+          git-cliff --unreleased --output CHANGELOG.md
+          echo "RELEASE_NOTES=$(base64 -w 0 CHANGELOG.md)" >> $GITHUB_OUTPUT
