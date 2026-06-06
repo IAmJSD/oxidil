@@ -4,7 +4,7 @@ on: push
 
 jobs:
   check-if-new-release:
-    name: Check if this is a new relase
+    name: Check if this is a new release
     outputs:
       version: ${{ steps.version-get.outputs.VERSION }}
     runs-on: ubuntu-24.04-arm
@@ -169,4 +169,21 @@ jobs:
           set -eo pipefail
           echo "${{ needs.get-release-notes.outputs.release-notes }}" | base64 --decode > CHANGELOG.md
       - uses: actions/download-artifact@v8
-      - run: ls -la
+      - name: Move artifacts for release
+        run: |
+          set -eo pipefail
+          mkdir artifacts
+          mv oxidil-aarch64-unknown-linux-gnu/oxidil artifacts/oxidil-aarch64-linux-gnu
+          mv oxidil-x86_64-unknown-linux-gnu/oxidil artifacts/oxidil-x86_64-linux-gnu
+          mv oxidil-x86_64-apple-darwin/oxidil artifacts/oxidil-x86_64-apple-darwin
+          mv oxidil-aarch64-apple-darwin/oxidil artifacts/oxidil-aarch64-apple-darwin
+          mv oxidil-x86_64-apple-darwin/oxidil artifacts/oxidil-x86_64-apple-darwin
+          mv oxidil-x86_64-pc-windows-msvc/oxidil.exe artifacts/oxidil-x86_64-pc-windows-msvc.exe
+          mv oxidil-aarch64-pc-windows-msvc/oxidil.exe artifacts/oxidil-aarch64-pc-windows-msvc.exe
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: artifacts/*
+          bodyFile: CHANGELOG.md
+          tag: ${{ needs.check-if-release.outputs.version }}
+          name: Oxidil ${{ needs.check-if-release.outputs.version }}
