@@ -26,7 +26,7 @@ jobs:
     name: Get release notes
     runs-on: ubuntu-24.04-arm
     needs: [check-if-new-release]
-    if: needs.check-if-new-release.version != ''
+    if: needs.check-if-new-release.outputs.version != ''
     outputs:
       release-notes: ${{ steps.release-notes.outputs.RELEASE_NOTES }}
     steps:
