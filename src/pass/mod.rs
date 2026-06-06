@@ -22,6 +22,7 @@ pub mod dead_param;
 pub mod dead_store;
 pub mod inlining;
 pub mod licm;
+pub mod object_construct;
 pub mod peephole;
 pub mod propagation;
 pub mod pure_eval;
@@ -158,6 +159,7 @@ fn pass_registry() -> Vec<PassCtor> {
         || Box::new(peephole::PeepholeAlgebraic) as Box<dyn Pass>,
         || Box::new(control_flow::ControlFlowSimplification) as Box<dyn Pass>,
         || Box::new(cse_gvn::CseGvn) as Box<dyn Pass>,
+        || Box::new(object_construct::ObjectConstruction) as Box<dyn Pass>,
         || Box::new(inlining::Inlining) as Box<dyn Pass>,
         || Box::new(dead_store::DeadStoreElimination) as Box<dyn Pass>,
         || Box::new(dead_param::DeadParamElimination) as Box<dyn Pass>,

@@ -445,6 +445,47 @@ fn inline_block_shadow_preserved() {
     );
 }
 
+// object-construction: fold a run of own-property stores into the declarator's
+// object literal (O2+), and the soundness boundaries that must NOT fold.
+#[test]
+fn objconstruct_folds_run_of_stores() {
+    assert_levels_match_o0("objconstruct_fold.js", "oc_fold", &["-2", "-3", "--Os"]);
+    // ...and the fold actually fired at -O2 (the stores are gone, replaced by
+    // literal members).
+    let o = out("riz_oc_fold_check.js");
+    run(&[
+        fixture("objconstruct_fold.js").to_str().unwrap(),
+        "--out",
+        o.to_str().unwrap(),
+        "-2",
+    ]);
+    let code = std::fs::read_to_string(&o).unwrap();
+    assert!(
+        !code.contains("x.a =") && !code.contains("x.b ="),
+        "stores should be folded into the literal: {code}"
+    );
+}
+#[test]
+fn objconstruct_proto_getter_not_folded() {
+    assert_levels_match_o0(
+        "objconstruct_proto_getter.js",
+        "oc_getter",
+        &["-2", "-3", "--Os"],
+    );
+}
+#[test]
+fn objconstruct_try_throw_partial_object_preserved() {
+    assert_levels_match_o0("objconstruct_try_throw.js", "oc_try", &["-2", "-3", "--Os"]);
+}
+#[test]
+fn objconstruct_self_reference_not_folded() {
+    assert_levels_match_o0(
+        "objconstruct_selfref.js",
+        "oc_selfref",
+        &["-2", "-3", "--Os"],
+    );
+}
+
 // cse-gvn: repeated coercion side effects must not be collapsed
 #[test]
 fn cse_does_not_drop_coercion_side_effects() {
