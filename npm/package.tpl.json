@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iamjsd/oxidil.git"
+    "url": "git+https://github.com/IAmJSD/oxidil.git"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
