@@ -1,0 +1,67 @@
+// array-construction folding: an ascending, dense, contiguous run of indexed
+// stores becomes one array literal — plus the soundness boundaries.
+// basic fold: literal + effectful (non-throwing) RHS
+function build(g) {
+	var x = [
+		1,
+		g(),
+		"z"
+	];
+	return x;
+}
+console.log(JSON.stringify(build(() => 2)), build(() => 2).length);
+// fold into a dense non-empty base literal
+function extend() {
+	var y = [
+		10,
+		20,
+		30,
+		40
+	];
+	return y;
+}
+console.log(JSON.stringify(extend()), extend().length);
+// sparse gap: only the contiguous prefix folds; the hole at index 1 is preserved
+function sparse() {
+	var x = [1];
+	x[2] = 3;
+	return [
+		JSON.stringify(x),
+		x.length,
+		1 in x
+	];
+}
+console.log(JSON.stringify(sparse()));
+// out-of-order / overwrite: not foldable, evaluation order preserved
+var order = [];
+function ooo() {
+	var x = [];
+	x[1] = (order.push("a"), "a");
+	x[0] = (order.push("b"), "b");
+	return [JSON.stringify(x), order.join(",")];
+}
+console.log(JSON.stringify(ooo()));
+// self-reference must not fold: var x = [x] reads hoisted undefined
+function selfref() {
+	var x = [];
+	x[0] = x;
+	x[1] = 2;
+	return x[0] === x && x[1] === 2;
+}
+console.log(selfref());
+// throwing store inside try: catch still sees the partial array [1]
+function partial() {
+	var x = [];
+	try {
+		x[0] = 1;
+		x[1] = (() => {
+			throw new Error("boom");
+		})();
+		x[2] = 3;
+	} catch (e) {}
+	return JSON.stringify(x);
+}
+console.log(partial());
+// top-level (script) var: only literal RHS folds
+var top = [1, 2];
+console.log(JSON.stringify(top), top.length);

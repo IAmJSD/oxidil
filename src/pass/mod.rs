@@ -14,6 +14,7 @@ use oxc_syntax::symbol::SymbolId;
 
 use crate::level::OptLevel;
 
+pub mod array_construct;
 pub mod constant_fold;
 pub mod control_flow;
 pub mod cse_gvn;
@@ -160,6 +161,7 @@ fn pass_registry() -> Vec<PassCtor> {
         || Box::new(control_flow::ControlFlowSimplification) as Box<dyn Pass>,
         || Box::new(cse_gvn::CseGvn) as Box<dyn Pass>,
         || Box::new(object_construct::ObjectConstruction) as Box<dyn Pass>,
+        || Box::new(array_construct::ArrayConstruction) as Box<dyn Pass>,
         || Box::new(inlining::Inlining) as Box<dyn Pass>,
         || Box::new(dead_store::DeadStoreElimination) as Box<dyn Pass>,
         || Box::new(dead_param::DeadParamElimination) as Box<dyn Pass>,

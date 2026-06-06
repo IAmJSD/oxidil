@@ -486,6 +486,58 @@ fn objconstruct_self_reference_not_folded() {
     );
 }
 
+// array-construction: fold an ascending dense run of indexed stores into the
+// declarator's array literal (O2+), and the soundness boundaries that must NOT
+// fold (sparse gap, tainted prototype, throwing store in try, self-reference).
+#[test]
+fn arrayconstruct_folds_ascending_run() {
+    assert_levels_match_o0("arrayconstruct_fold.js", "ac_fold", &["-2", "-3", "--Os"]);
+    let o = out("riz_ac_fold_check.js");
+    run(&[
+        fixture("arrayconstruct_fold.js").to_str().unwrap(),
+        "--out",
+        o.to_str().unwrap(),
+        "-2",
+    ]);
+    let code = std::fs::read_to_string(&o).unwrap();
+    assert!(
+        !code.contains("x[0] =") && !code.contains("x[1] =") && !code.contains("y[2] ="),
+        "indexed stores should be folded into the literal: {code}"
+    );
+}
+#[test]
+fn arrayconstruct_sparse_prefix_only() {
+    assert_levels_match_o0(
+        "arrayconstruct_sparse.js",
+        "ac_sparse",
+        &["-2", "-3", "--Os"],
+    );
+}
+#[test]
+fn arrayconstruct_proto_getter_not_folded() {
+    assert_levels_match_o0(
+        "arrayconstruct_proto_getter.js",
+        "ac_getter",
+        &["-2", "-3", "--Os"],
+    );
+}
+#[test]
+fn arrayconstruct_try_throw_partial_array_preserved() {
+    assert_levels_match_o0(
+        "arrayconstruct_try_throw.js",
+        "ac_try",
+        &["-2", "-3", "--Os"],
+    );
+}
+#[test]
+fn arrayconstruct_self_reference_not_folded() {
+    assert_levels_match_o0(
+        "arrayconstruct_selfref.js",
+        "ac_selfref",
+        &["-2", "-3", "--Os"],
+    );
+}
+
 // cse-gvn: repeated coercion side effects must not be collapsed
 #[test]
 fn cse_does_not_drop_coercion_side_effects() {

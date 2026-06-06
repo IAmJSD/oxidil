@@ -56,7 +56,7 @@ code). `--ts-typeof` is orthogonal and layers on at any level >= 1.
 |-------|----------------|--------------|
 | `-O0` | *(none — parse → type-strip if TS → codegen passthrough)* | 0 |
 | `-O1` | propagation, pure-eval, constant-folding, peephole-algebraic, control-flow-simplification | 1 (light) |
-| `-O2` | `-O1` + cse-gvn, object-construction, inlining, dead-store-elimination, dead-param-elimination, dead-code-elimination | 8 (full fixpoint) |
+| `-O2` | `-O1` + cse-gvn, object-construction, array-construction, inlining, dead-store-elimination, dead-param-elimination, dead-code-elimination | 8 (full fixpoint) |
 | `-O3` | `-O2` passes + licm | 16 (more iterations) |
 | `-Os` | `-O2` passes + minify-rename + compact codegen | 8 |
 | `--ts-typeof` | adds ts-typeof-elimination at any level >= 1 | — |
@@ -74,6 +74,7 @@ Per-pass level assignment encoded in the registry (gated centrally by
 | `control-flow-simplification` | O1 | if/else, blocks, switch-on-const |
 | `cse-gvn` | O2 | local value numbering |
 | `object-construction` | O2 | fold property-store runs into object literals |
+| `array-construction` | O2 | fold ascending indexed-store runs into array literals |
 | `inlining` | O2 | single-use variable inlining |
 | `dead-store-elimination` | O2 | |
 | `dead-param-elimination` | O2 | trailing unused params |
@@ -198,7 +199,25 @@ unreliable).
    unobservable — inside a function body with no enclosing `try`, and the binding
    not closed over; otherwise every folded RHS must be a literal. Idempotent: the
    run is consumed, so a re-run finds no following store.
-9. **inlining** (`inlining`, O2) — single-use variable inlining: a
+9. **array-construction** (`array-construction`, O2) — the array analogue of
+   object-construction: a freshly-declared array built by an **ascending,
+   contiguous** run of indexed stores folds into one array literal:
+   `var x = []; x[0] = 1; x[1] = 2;` → `var x = [1, 2];`. Only a dense ascending
+   run (each store writes the next index, starting at the dense base literal's
+   length) is consumed — this preserves element evaluation order (a literal
+   evaluates left-to-right) and density (a gap like `x[0]=1; x[2]=3` stops the run
+   rather than synthesizing an elision). **Soundness boundary:** same `[[Set]]`
+   vs CreateDataProperty hazard as object-construction, but an indexed store walks
+   `x → Array.prototype → Object.prototype`, so the pass bails the whole program on
+   any mutation of **either** `%Array.prototype%` or `%Object.prototype%`. The base
+   must be a dense array literal (no spread / hole, so the next index is known), the
+   store key a numeric literal that is a canonical array index (`0 ≤ i < 2³²-1`)
+   equal to the next expected index, and the same throw-vs-binding rule applies
+   (effectful/throwing RHS only when a throw is unobservable; else literal-only). A
+   folded RHS may never reference the binding (`var x = [x]` reads hoisted
+   `undefined`/TDZ). Overwrites (`[a,b]; x[1]=c`) and out-of-order stores are never
+   folded (they would drop or reorder element evaluation).
+10. **inlining** (`inlining`, O2) — single-use variable inlining: a
    single-assignment, single-use, non-closed-over local with a **pure**
    initializer has its initializer moved to the use. Module-root non-exported
    `const`/`let` are now inline-eligible (module-private; an exported root binding
@@ -215,14 +234,14 @@ unreliable).
    initializer reads any free local, the use must be in the declarator's scope so
    no intervening block can re-resolve (shadow) that identifier. Never inlines a
    function (this/arguments/recursion hazards).
-10. **dead-store-elimination** (`dead-store-elimination`, O2) — removes
+11. **dead-store-elimination** (`dead-store-elimination`, O2) — removes
    assignments whose value is never read (and no-op `x = x`). **Soundness
    boundary:** never touches a `const`/`let`/`class` (block-scoped) target — the
    write itself can throw (const TypeError, TDZ ReferenceError) — and never a
    function **parameter** (writing it is observable via a mapped `arguments`
    object in sloppy mode). Only simple `=` identifier targets; member stores
    (setters/proxies) excluded.
-11. **dead-param-elimination** (`dead-param-elimination`, O2) — drops trailing
+12. **dead-param-elimination** (`dead-param-elimination`, O2) — drops trailing
     unused parameters of a local function whose every use is a direct call, and
     the matching trailing args at each call site. **Soundness boundary:** a
     dropped argument must be side-effect-free **and** must not read a lexical
@@ -230,7 +249,7 @@ unreliable).
     (evaluating it throws — dropping it would delete the throw). Spreads, default
     params, rest params, destructuring, generators, and `arguments` users are
     excluded.
-12. **dead-code-elimination** (`dead-code-elimination`, O2) — drops empty
+13. **dead-code-elimination** (`dead-code-elimination`, O2) — drops empty
     statements, truncates code after an unconditional terminator, collapses
     `if(<const>)`, and removes unused local `let`/`const`/`function` bindings via
     `oxc_semantic` reference counts. **Module-root non-exported bindings are now
@@ -243,7 +262,7 @@ unreliable).
     `const unused = later; const later = 5;` (a sibling TDZ read) and
     `const unused = notDefined;` (an undeclared-global read) from having their
     `ReferenceError` deleted.
-13. **licm** (`licm`, O3) — loop-invariant code motion: a pure, non-trivial
+14. **licm** (`licm`, O3) — loop-invariant code motion: a pure, non-trivial
     invariant expression in a loop body is hoisted to a `const` temp before the
     loop. **Soundness boundary:** same non-coercing operator restriction as
     cse-gvn (including the **provably-finite-`Number`** operand broadening for the
@@ -251,7 +270,7 @@ unreliable).
     operand whose declaration is at/after the loop is rejected (reading it at the
     pre-loop site would throw when the loop runs zero times). Only never-mutated
     local / literal operands.
-14. **minify-rename** (`minify-rename`, `-Os` only) — short identifier names via
+15. **minify-rename** (`minify-rename`, `-Os` only) — short identifier names via
     `oxc_mangler`'s scope analysis. Bails the whole pass on `with`/direct-`eval`.
 
 ## The `--ts-typeof` feature
@@ -373,8 +392,15 @@ cannot prove safe rather than risk a behavior change. Notable conservative gaps:
   Object.prototype; p.k = …`, or a taint from external code, is not detected).
   Inside a `try`, or for a closed-over / top-level binding, only literal-RHS stores
   fold (a possibly-throwing RHS could leave the binding unassigned where the
-  original kept a partial object). Assignment-form heads (`x = {}`) and array
-  literals are not handled.
+  original kept a partial object). Assignment-form heads (`x = {}`) are not handled.
+- **array-construction** only folds an *ascending, contiguous* run of indexed
+  stores starting at the dense base literal's length — a gap, an overwrite, or an
+  out-of-order store ends the run (folding them would drop or reorder element
+  evaluation, or need an elision the pass does not synthesize). It bails the whole
+  program on any in-program mutation of `%Array.prototype%` or `%Object.prototype%`
+  (alias / external taints undetected), and shares object-construction's
+  throw-vs-binding and self-reference rules. Assignment-form heads (`x = []`) and
+  string / computed-expression keys are not handled.
 - **control-flow-simplification**'s switch-on-constant fold keeps the switch
   whenever the matched region contains a `break`/`continue` (it does not yet
   rewrite a clean trailing `break` into a fall-through-free block), so many
