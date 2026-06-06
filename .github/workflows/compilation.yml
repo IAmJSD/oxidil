@@ -177,7 +177,6 @@ jobs:
           mv oxidil-x86_64-unknown-linux-gnu/oxidil artifacts/oxidil-x86_64-linux-gnu
           mv oxidil-x86_64-apple-darwin/oxidil artifacts/oxidil-x86_64-apple-darwin
           mv oxidil-aarch64-apple-darwin/oxidil artifacts/oxidil-aarch64-apple-darwin
-          mv oxidil-x86_64-apple-darwin/oxidil artifacts/oxidil-x86_64-apple-darwin
           mv oxidil-x86_64-pc-windows-msvc/oxidil.exe artifacts/oxidil-x86_64-pc-windows-msvc.exe
           mv oxidil-aarch64-pc-windows-msvc/oxidil.exe artifacts/oxidil-aarch64-pc-windows-msvc.exe
       - name: Create release
