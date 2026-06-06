@@ -91,3 +91,33 @@ jobs:
           name: oxidil-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/oxidil
           if-no-files-found: error
+
+  win-comp:
+    name: Compile (${{ matrix.target }})
+    runs-on: windows-2025
+    needs: [check-if-new-release]
+    if: needs.check-if-new-release.outputs.version != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+          - target: aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust 1.96.0
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: ${{ matrix.target }}
+      - name: Cache cargo & target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (release)
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: oxidil-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/oxidil.exe
+          if-no-files-found: error
