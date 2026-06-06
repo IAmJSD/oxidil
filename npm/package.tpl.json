@@ -7,6 +7,10 @@
   "bin": {
     "oxidil": "dist/cli.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamjsd/oxidil.git"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
