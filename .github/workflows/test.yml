@@ -10,28 +10,17 @@ jobs:
     name: build & test
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-
-      # Pinned to 1.96.0 so the clippy gate stays deterministic (new toolchains
-      # can introduce lints). oxc 0.134.0 needs Rust >=1.94; we are well past it.
+      - uses: actions/checkout@v6
       - name: Install Rust 1.96.0
         uses: dtolnay/rust-toolchain@1.96.0
-
-      # Caches ~/.cargo (registry, git, bin) and ./target, keyed on Cargo.lock
-      # plus the toolchain. Restores across runs so deps aren't recompiled.
       - name: Cache cargo & target
         uses: Swatinem/rust-cache@v2
-
-      # node is needed by the corpus differential tests in tests/integration.rs
-      # (they skip gracefully if absent, but we want them to actually run).
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
-
       - name: Build (release)
         run: cargo build --release --locked
-
       - name: Test
         run: cargo test --release --locked
 
@@ -39,24 +28,17 @@ jobs:
     name: differential test
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v6
       - name: Install Rust 1.96.0
         uses: dtolnay/rust-toolchain@1.96.0
-
       - name: Cache cargo & target
         uses: Swatinem/rust-cache@v2
-
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
-
       - name: Build (release)
         run: cargo build --release --locked
-
-      # Compiles every corpus program at -O0..-Os, runs each through node, and
-      # fails if any optimization level diverges from the -O0 baseline.
       - name: Run differential corpus test
         run: bash difftest/run.sh
 
@@ -64,7 +46,7 @@ jobs:
     name: rustfmt
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust 1.96.0
         uses: dtolnay/rust-toolchain@1.96.0
@@ -78,7 +60,7 @@ jobs:
     name: clippy
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust 1.96.0
         uses: dtolnay/rust-toolchain@1.96.0
