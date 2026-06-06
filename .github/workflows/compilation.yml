@@ -39,10 +39,12 @@ jobs:
           sudo chmod +x /usr/local/bin/git-cliff
           rm git-cliff-2.12.0-aarch64-unknown-linux-gnu.tar.gz
           rm -rf git-cliff-2.12.0
+
       - name: Checkout code
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
       - name: Get release notes
         id: release-notes
         run: |
@@ -65,10 +67,12 @@ jobs:
             method: linux-cross
     steps:
       - uses: actions/checkout@v6
+
       - name: Install Rust 1.96.0
         uses: dtolnay/rust-toolchain@1.96.0
         with:
           targets: ${{ matrix.target }}
+
       - name: Cache cargo & target
         uses: Swatinem/rust-cache@v2
 
@@ -81,7 +85,6 @@ jobs:
 
       - name: Build (release)
         env:
-          # Only consulted for the x86_64 Linux target; harmless otherwise.
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: x86_64-linux-gnu-gcc
         run: cargo build --release --locked --target ${{ matrix.target }}
 
@@ -105,21 +108,120 @@ jobs:
           - target: x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v6
+
       - name: Install Rust 1.96.0
         uses: dtolnay/rust-toolchain@1.96.0
         with:
           targets: ${{ matrix.target }}
+
       - name: Cache cargo & target
         uses: Swatinem/rust-cache@v2
 
       - name: Build (release)
         run: cargo build --release --locked --target ${{ matrix.target }}
 
-      - name: Upload binary
+      - name: Setup signing keychain
+        env:
+          MACOS_APP_CERTIFICATE_BASE64: ${{ secrets.MACOS_APP_CERTIFICATE_BASE64 }}
+          MACOS_APP_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_APP_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -eo pipefail
+
+          APP_CERT_PATH="$RUNNER_TEMP/developer_id_application.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          echo "$MACOS_APP_CERTIFICATE_BASE64" | base64 --decode > "$APP_CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$APP_CERT_PATH" \
+            -P "$MACOS_APP_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -d user -s "$KEYCHAIN_PATH"
+
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          echo "Available code signing identities:"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Sign binary
+        env:
+          MACOS_CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+        run: |
+          set -eo pipefail
+
+          BIN_PATH="target/${{ matrix.target }}/release/oxidil"
+
+          codesign \
+            --force \
+            --options runtime \
+            --timestamp \
+            --sign "$MACOS_CODESIGN_IDENTITY" \
+            "$BIN_PATH"
+
+          codesign --verify --verbose=4 "$BIN_PATH"
+          codesign --display --verbose=4 "$BIN_PATH"
+
+      - name: Create notarization archive
+        run: |
+          set -eo pipefail
+
+          BIN_PATH="$(pwd)/target/${{ matrix.target }}/release/oxidil"
+          DIST_DIR="$RUNNER_TEMP/dist"
+          ARCHIVE_PATH="$RUNNER_TEMP/oxidil-${{ matrix.target }}.zip"
+
+          mkdir -p "$DIST_DIR"
+          cp "$BIN_PATH" "$DIST_DIR/oxidil"
+          chmod +x "$DIST_DIR/oxidil"
+
+          pushd "$DIST_DIR"
+          ditto -c -k --sequesterRsrc --keepParent oxidil "$ARCHIVE_PATH"
+          popd
+
+          echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$GITHUB_ENV"
+
+      - name: Notarize archive
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -eo pipefail
+
+          xcrun notarytool submit "$ARCHIVE_PATH" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --wait
+
+      - name: Verify notarized archive
+        run: |
+          set -eo pipefail
+
+          spctl \
+            --assess \
+            --type open \
+            --context context:primary-signature \
+            --verbose=4 \
+            "$ARCHIVE_PATH"
+
+      - name: Upload notarized archive
         uses: actions/upload-artifact@v6
         with:
           name: oxidil-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/oxidil
+          path: ${{ env.ARCHIVE_PATH }}
           if-no-files-found: error
 
   win-comp:
@@ -135,10 +237,12 @@ jobs:
           - target: aarch64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v6
+
       - name: Install Rust 1.96.0
         uses: dtolnay/rust-toolchain@1.96.0
         with:
           targets: ${{ matrix.target }}
+
       - name: Cache cargo & target
         uses: Swatinem/rust-cache@v2
 
@@ -165,22 +269,39 @@ jobs:
         win-comp,
       ]
     runs-on: ubuntu-24.04-arm
+    if: needs.check-if-new-release.outputs.version != ''
     steps:
       - name: Decode release notes
         run: |
           set -eo pipefail
           echo "${{ needs.get-release-notes.outputs.release-notes }}" | base64 --decode > CHANGELOG.md
+
       - uses: actions/download-artifact@v8
+
       - name: Move artifacts for release
         run: |
           set -eo pipefail
+
           mkdir artifacts
-          mv oxidil-aarch64-unknown-linux-gnu/oxidil artifacts/oxidil-aarch64-linux-gnu
-          mv oxidil-x86_64-unknown-linux-gnu/oxidil artifacts/oxidil-x86_64-linux-gnu
-          mv oxidil-x86_64-apple-darwin/oxidil artifacts/oxidil-x86_64-apple-darwin
-          mv oxidil-aarch64-apple-darwin/oxidil artifacts/oxidil-aarch64-apple-darwin
-          mv oxidil-x86_64-pc-windows-msvc/oxidil.exe artifacts/oxidil-x86_64-pc-windows-msvc.exe
-          mv oxidil-aarch64-pc-windows-msvc/oxidil.exe artifacts/oxidil-aarch64-pc-windows-msvc.exe
+
+          mv oxidil-aarch64-unknown-linux-gnu/oxidil \
+            artifacts/oxidil-aarch64-linux-gnu
+
+          mv oxidil-x86_64-unknown-linux-gnu/oxidil \
+            artifacts/oxidil-x86_64-linux-gnu
+
+          mv oxidil-x86_64-apple-darwin/oxidil-x86_64-apple-darwin.zip \
+            artifacts/oxidil-x86_64-apple-darwin.zip
+
+          mv oxidil-aarch64-apple-darwin/oxidil-aarch64-apple-darwin.zip \
+            artifacts/oxidil-aarch64-apple-darwin.zip
+
+          mv oxidil-x86_64-pc-windows-msvc/oxidil.exe \
+            artifacts/oxidil-x86_64-pc-windows-msvc.exe
+
+          mv oxidil-aarch64-pc-windows-msvc/oxidil.exe \
+            artifacts/oxidil-aarch64-pc-windows-msvc.exe
+
       - name: Create release
         uses: ncipollo/release-action@v1
         with:
