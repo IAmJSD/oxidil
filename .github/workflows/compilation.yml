@@ -86,7 +86,7 @@ jobs:
         run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: oxidil-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/oxidil
@@ -116,7 +116,7 @@ jobs:
         run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: oxidil-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/oxidil
@@ -124,7 +124,7 @@ jobs:
 
   win-comp:
     name: Compile (${{ matrix.target }})
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     needs: [check-if-new-release]
     if: needs.check-if-new-release.outputs.version != ''
     strategy:
@@ -146,8 +146,27 @@ jobs:
         run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: oxidil-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/oxidil.exe
           if-no-files-found: error
+
+  publish-release:
+    name: Publish Release
+    needs:
+      [
+        check-if-new-release,
+        get-release-notes,
+        linux-comp,
+        macos-comp,
+        win-comp,
+      ]
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Decode release notes
+        run: |
+          set -eo pipefail
+          echo "${{ needs.get-release-notes.outputs.release-notes }}" | base64 --decode > CHANGELOG.md
+      - uses: actions/download-artifact@v8
+      - run: ls -la
