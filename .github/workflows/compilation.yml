@@ -50,7 +50,7 @@ jobs:
           git-cliff --unreleased --output CHANGELOG.md
           echo "RELEASE_NOTES=$(base64 -w 0 CHANGELOG.md)" >> $GITHUB_OUTPUT
 
-  linux-and-windows-comp:
+  linux-comp:
     name: Compile (${{ matrix.target }})
     runs-on: ubuntu-24.04-arm
     needs: [check-if-new-release]
@@ -59,22 +59,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Native build on the arm64 runner.
           - target: aarch64-unknown-linux-gnu
-            binary: oxidil
             method: native
-          # Cross-compiled to x86_64 with the GNU cross linker.
           - target: x86_64-unknown-linux-gnu
-            binary: oxidil
             method: linux-cross
-          # Cross-compiled to x86_64 Windows with cargo-xwin (downloads the MSVC CRT/SDK).
-          - target: x86_64-pc-windows-msvc
-            binary: oxidil.exe
-            method: xwin
-          # Cross-compiled to ARM Windows with cargo-xwin (downloads the MSVC CRT/SDK).
-          - target: aarch64-pc-windows-msvc
-            binary: oxidil.exe
-            method: xwin
     steps:
       - uses: actions/checkout@v6
       - name: Install Rust 1.96.0
@@ -90,27 +78,16 @@ jobs:
           set -eo pipefail
           sudo apt-get update
           sudo apt-get install -y gcc-x86-64-linux-gnu
-      - name: Install cargo-xwin toolchain
-        if: matrix.method == 'xwin'
-        run: |
-          set -eo pipefail
-          sudo apt-get update
-          sudo apt-get install -y clang llvm lld
-          cargo install --locked cargo-xwin
 
       - name: Build (release)
-        if: matrix.method != 'xwin'
         env:
           # Only consulted for the x86_64 Linux target; harmless otherwise.
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: x86_64-linux-gnu-gcc
         run: cargo build --release --locked --target ${{ matrix.target }}
-      - name: Build (release, cargo-xwin)
-        if: matrix.method == 'xwin'
-        run: cargo xwin build --release --locked --target ${{ matrix.target }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: oxidil-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/${{ matrix.binary }}
+          path: target/${{ matrix.target }}/release/oxidil
           if-no-files-found: error
