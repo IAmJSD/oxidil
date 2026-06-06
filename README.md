@@ -309,7 +309,7 @@ the differential corpus harness, `rustfmt --check`, and `clippy -D warnings` —
 on Rust 1.96.0 and Node 24, with the cargo registry and `target/` cached across
 runs.
 
-## Limitations (honest summary)
+## Limitations
 
 Every pass favors correctness over completeness: it misses opportunities it
 cannot prove safe rather than risk a behavior change. Notable conservative gaps:
