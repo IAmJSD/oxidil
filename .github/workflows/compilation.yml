@@ -220,8 +220,15 @@ jobs:
           mkdir -p "$VERIFY_DIR"
           ditto -x -k "$ARCHIVE_PATH" "$VERIFY_DIR"
 
-          codesign --verify --strict --verbose=4 "$VERIFY_DIR/oxidil"
-          codesign --display --verbose=4 "$VERIFY_DIR/oxidil"
+          BIN="$(find "$VERIFY_DIR" -type f -name oxidil | head -n1)"
+          if [ -z "$BIN" ]; then
+            echo "Could not find oxidil binary in extracted archive:" >&2
+            find "$VERIFY_DIR" >&2
+            exit 1
+          fi
+
+          codesign --verify --strict --verbose=4 "$BIN"
+          codesign --display --verbose=4 "$BIN"
 
       - name: Upload notarized archive
         uses: actions/upload-artifact@v6
