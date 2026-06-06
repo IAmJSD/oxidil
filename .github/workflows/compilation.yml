@@ -154,6 +154,8 @@ jobs:
 
   publish-release:
     name: Publish Release
+    permissions:
+      contents: write
     needs:
       [
         check-if-new-release,
