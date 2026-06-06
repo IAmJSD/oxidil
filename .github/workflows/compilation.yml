@@ -359,6 +359,9 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      - name: Update npm
+        run: npm install -g npm@latest
+
       - name: Generate versioned files from Cargo.toml
         run: make generate
 
