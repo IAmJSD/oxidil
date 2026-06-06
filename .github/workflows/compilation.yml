@@ -210,12 +210,18 @@ jobs:
         run: |
           set -eo pipefail
 
-          spctl \
-            --assess \
-            --type open \
-            --context context:primary-signature \
-            --verbose=4 \
-            "$ARCHIVE_PATH"
+          # A standalone CLI binary cannot be stapled, and spctl cannot assess
+          # a .zip (it has no signature of its own). notarytool --wait already
+          # confirmed the submission was Accepted, so here we just confirm the
+          # binary inside the archive carries an intact, hardened-runtime
+          # signature.
+          VERIFY_DIR="$RUNNER_TEMP/verify"
+          rm -rf "$VERIFY_DIR"
+          mkdir -p "$VERIFY_DIR"
+          ditto -x -k "$ARCHIVE_PATH" "$VERIFY_DIR"
+
+          codesign --verify --strict --verbose=4 "$VERIFY_DIR/oxidil"
+          codesign --display --verbose=4 "$VERIFY_DIR/oxidil"
 
       - name: Upload notarized archive
         uses: actions/upload-artifact@v6
