@@ -185,4 +185,4 @@ jobs:
           artifacts: artifacts/*
           bodyFile: CHANGELOG.md
           tag: ${{ needs.check-if-release.outputs.version }}
-          name: Oxidil ${{ needs.check-if-release.outputs.version }}
+          name: Oxidil ${{ needs.check-if-new-release.outputs.version }}
