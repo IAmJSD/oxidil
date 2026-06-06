@@ -24,6 +24,7 @@ pub mod dead_store;
 pub mod inlining;
 pub mod licm;
 pub mod object_construct;
+pub mod param_scalarize;
 pub mod peephole;
 pub mod propagation;
 pub mod pure_eval;
@@ -163,6 +164,7 @@ fn pass_registry() -> Vec<PassCtor> {
         || Box::new(object_construct::ObjectConstruction) as Box<dyn Pass>,
         || Box::new(array_construct::ArrayConstruction) as Box<dyn Pass>,
         || Box::new(inlining::Inlining) as Box<dyn Pass>,
+        || Box::new(param_scalarize::ParamScalarization) as Box<dyn Pass>,
         || Box::new(dead_store::DeadStoreElimination) as Box<dyn Pass>,
         || Box::new(dead_param::DeadParamElimination) as Box<dyn Pass>,
         || Box::new(dce::DeadCodeElimination) as Box<dyn Pass>,

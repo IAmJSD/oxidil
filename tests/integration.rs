@@ -538,6 +538,49 @@ fn arrayconstruct_self_reference_not_folded() {
     );
 }
 
+// param-scalarization: split a non-escaping local function's options-object param
+// into scalar params + rewrite call sites (O2+), and bail on every hazard.
+#[test]
+fn scalarize_splits_options_object() {
+    assert_levels_match_o0("scalarize_fold.js", "sc_fold", &["-2", "-3", "--Os"]);
+    let o = out("riz_sc_fold_check.js");
+    run(&[
+        fixture("scalarize_fold.js").to_str().unwrap(),
+        "--out",
+        o.to_str().unwrap(),
+        "-2",
+    ]);
+    let code = std::fs::read_to_string(&o).unwrap();
+    assert!(
+        !code.contains("opts"),
+        "options object should be scalarized away: {code}"
+    );
+}
+#[test]
+fn scalarize_escaping_object_not_split() {
+    assert_levels_match_o0("scalarize_escape.js", "sc_escape", &["-2", "-3", "--Os"]);
+}
+#[test]
+fn scalarize_getter_literal_not_split() {
+    assert_levels_match_o0("scalarize_getter.js", "sc_getter", &["-2", "-3", "--Os"]);
+}
+#[test]
+fn scalarize_inconsistent_order_not_split() {
+    assert_levels_match_o0("scalarize_order.js", "sc_order", &["-2", "-3", "--Os"]);
+}
+#[test]
+fn scalarize_arguments_user_not_split() {
+    assert_levels_match_o0("scalarize_arguments.js", "sc_args", &["-2", "-3", "--Os"]);
+}
+#[test]
+fn scalarize_key_collision_not_split() {
+    assert_levels_match_o0("scalarize_collision.js", "sc_coll", &["-2", "-3", "--Os"]);
+}
+#[test]
+fn scalarize_proto_taint_not_split() {
+    assert_levels_match_o0("scalarize_proto.js", "sc_proto", &["-2", "-3", "--Os"]);
+}
+
 // cse-gvn: repeated coercion side effects must not be collapsed
 #[test]
 fn cse_does_not_drop_coercion_side_effects() {

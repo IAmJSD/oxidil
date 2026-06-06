@@ -56,7 +56,7 @@ code). `--ts-typeof` is orthogonal and layers on at any level >= 1.
 |-------|----------------|--------------|
 | `-O0` | *(none — parse → type-strip if TS → codegen passthrough)* | 0 |
 | `-O1` | propagation, pure-eval, constant-folding, peephole-algebraic, control-flow-simplification | 1 (light) |
-| `-O2` | `-O1` + cse-gvn, object-construction, array-construction, inlining, dead-store-elimination, dead-param-elimination, dead-code-elimination | 8 (full fixpoint) |
+| `-O2` | `-O1` + cse-gvn, object-construction, array-construction, inlining, param-scalarization, dead-store-elimination, dead-param-elimination, dead-code-elimination | 8 (full fixpoint) |
 | `-O3` | `-O2` passes + licm | 16 (more iterations) |
 | `-Os` | `-O2` passes + minify-rename + compact codegen | 8 |
 | `--ts-typeof` | adds ts-typeof-elimination at any level >= 1 | — |
@@ -76,6 +76,7 @@ Per-pass level assignment encoded in the registry (gated centrally by
 | `object-construction` | O2 | fold property-store runs into object literals |
 | `array-construction` | O2 | fold ascending indexed-store runs into array literals |
 | `inlining` | O2 | single-use variable inlining |
+| `param-scalarization` | O2 | options-object param → positional scalar params |
 | `dead-store-elimination` | O2 | |
 | `dead-param-elimination` | O2 | trailing unused params |
 | `dead-code-elimination` | O2 | |
@@ -234,14 +235,37 @@ unreliable).
    initializer reads any free local, the use must be in the declarator's scope so
    no intervening block can re-resolve (shadow) that identifier. Never inlines a
    function (this/arguments/recursion hazards).
-11. **dead-store-elimination** (`dead-store-elimination`, O2) — removes
+11. **param-scalarization** (`param-scalarization`, O2) — replaces a local
+    function's trailing **options-object** parameter with the individual scalar
+    parameters it decomposes into, rewriting every call site to pass the values
+    positionally: `function f(opts){return opts.a+opts.b}` + `f({a:1,b:g()})`
+    becomes `function f(a,b){return a+b}` + `f(1,g())` (interprocedural scalar
+    replacement of a non-escaping aggregate; removes the per-call allocation and
+    feeds the values to folding/inlining). **Soundness boundary:** the function
+    must be a local, **non-exported** declaration (and, in a script, not a global
+    root) whose every reference is a **direct call callee** (no `new f`, alias,
+    value use, tagged template); it must not use `arguments`; and `opts` (the last
+    simple param) may appear only as a static, non-computed, non-optional
+    `opts.<ident>` — a read, or a `=`/compound/`++` write target (value mutation is
+    fine: the literal is fresh and never escapes), never bare, `opts[expr]`,
+    `delete opts.x`, or spread. Every call site must pass an **object literal** with
+    plain data properties only (a getter would run once-per-read vs once-as-value),
+    no spread, static identifier keys, and no duplicates; a key the function never
+    reads is dropped only if side-effect-free. A single canonical param order is
+    chosen and each site's side-effecting values must keep their relative order
+    under it. Missing keys become `void 0` — sound only because used keys exclude
+    `Object.prototype` names and the pass bails on any program-level
+    `%Object.prototype%` mutation (so an absent key reads `undefined`, not an
+    inherited value). No used key may collide with another identifier in the
+    function (the new param name could otherwise capture it).
+12. **dead-store-elimination** (`dead-store-elimination`, O2) — removes
    assignments whose value is never read (and no-op `x = x`). **Soundness
    boundary:** never touches a `const`/`let`/`class` (block-scoped) target — the
    write itself can throw (const TypeError, TDZ ReferenceError) — and never a
    function **parameter** (writing it is observable via a mapped `arguments`
    object in sloppy mode). Only simple `=` identifier targets; member stores
    (setters/proxies) excluded.
-12. **dead-param-elimination** (`dead-param-elimination`, O2) — drops trailing
+13. **dead-param-elimination** (`dead-param-elimination`, O2) — drops trailing
     unused parameters of a local function whose every use is a direct call, and
     the matching trailing args at each call site. **Soundness boundary:** a
     dropped argument must be side-effect-free **and** must not read a lexical
@@ -249,7 +273,7 @@ unreliable).
     (evaluating it throws — dropping it would delete the throw). Spreads, default
     params, rest params, destructuring, generators, and `arguments` users are
     excluded.
-13. **dead-code-elimination** (`dead-code-elimination`, O2) — drops empty
+14. **dead-code-elimination** (`dead-code-elimination`, O2) — drops empty
     statements, truncates code after an unconditional terminator, collapses
     `if(<const>)`, and removes unused local `let`/`const`/`function` bindings via
     `oxc_semantic` reference counts. **Module-root non-exported bindings are now
@@ -262,7 +286,7 @@ unreliable).
     `const unused = later; const later = 5;` (a sibling TDZ read) and
     `const unused = notDefined;` (an undeclared-global read) from having their
     `ReferenceError` deleted.
-14. **licm** (`licm`, O3) — loop-invariant code motion: a pure, non-trivial
+15. **licm** (`licm`, O3) — loop-invariant code motion: a pure, non-trivial
     invariant expression in a loop body is hoisted to a `const` temp before the
     loop. **Soundness boundary:** same non-coercing operator restriction as
     cse-gvn (including the **provably-finite-`Number`** operand broadening for the
@@ -270,7 +294,7 @@ unreliable).
     operand whose declaration is at/after the loop is rejected (reading it at the
     pre-loop site would throw when the loop runs zero times). Only never-mutated
     local / literal operands.
-15. **minify-rename** (`minify-rename`, `-Os` only) — short identifier names via
+16. **minify-rename** (`minify-rename`, `-Os` only) — short identifier names via
     `oxc_mangler`'s scope analysis. Bails the whole pass on `with`/direct-`eval`.
 
 ## The `--ts-typeof` feature
@@ -401,6 +425,17 @@ cannot prove safe rather than risk a behavior change. Notable conservative gaps:
   (alias / external taints undetected), and shares object-construction's
   throw-vs-binding and self-reference rules. Assignment-form heads (`x = []`) and
   string / computed-expression keys are not handled.
+- **param-scalarization** only splits a `function` *declaration* (never an arrow /
+  function expression / method) whose `opts` is the **last** simple parameter, and
+  only when EVERY call site passes an inline object literal — a variable, spread,
+  or omitted argument at the opts position disables it (it does not inline a
+  variable-held literal itself; the `inlining` pass may first). It bails on any
+  `arguments` use, any non-`opts.<ident>` use of the param, an `Object.prototype`
+  name or in-program `%Object.prototype%` mutation, a key colliding with another
+  identifier in the function, a getter/spread/duplicate-key/computed-key call-site
+  literal, a side-effecting extra key, or call sites whose side-effecting values
+  cannot share one evaluation order. Capped at 8 generated params, and an aliased
+  / re-exported / `new`-constructed function is never touched.
 - **control-flow-simplification**'s switch-on-constant fold keeps the switch
   whenever the matched region contains a `break`/`continue` (it does not yet
   rewrite a clean trailing `break` into a fall-through-free block), so many
