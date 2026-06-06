@@ -1,29 +1,68 @@
-//! oxidil: a Rust JS/TS optimizing compiler with an oxc front-end.
-//!
-//! Thin entry: parse CLI, run the driver, map errors to exit codes.
+//! oxidil CLI: parse CLI, read input, run the compile core, write outputs,
+//! map errors to exit codes. All file I/O lives here; the optimization core
+//! ([`oxidil::compile`]) is pure and shared with the WASM build.
 
 mod cli;
-mod driver;
-mod error;
-mod level;
-mod pass;
-mod semantic_util;
-mod sourcemap;
-mod ts_strip;
+
+use std::fs;
+use std::path::Path;
 
 use clap::Parser;
 
-use crate::cli::Cli;
+use cli::Cli;
+use oxidil::driver::CompileOptions;
+use oxidil::error::Result;
 
 fn main() {
     let cli = Cli::parse_from(normalize_opt_flags(std::env::args().collect()));
-    match driver::run(&cli) {
+    match run(&cli) {
         Ok(()) => {}
         Err(e) => {
             eprintln!("{e}");
             std::process::exit(e.exit_code());
         }
     }
+}
+
+/// Read input, build options, compile, and write the requested outputs.
+fn run(cli: &Cli) -> Result<()> {
+    let source_text = fs::read_to_string(&cli.input)?;
+
+    let input_source_map = match &cli.source_map {
+        Some(p) => Some(fs::read_to_string(p)?),
+        None => None,
+    };
+
+    let opts = CompileOptions {
+        level: cli.opt_level(),
+        ts_typeof: cli.ts_typeof,
+        overrides: cli.overrides(),
+        filename: cli.input.to_string_lossy().into_owned(),
+        source_map: true,
+        input_source_map,
+    };
+
+    let out = oxidil::driver::compile(&source_text, &opts)?;
+    let mut code = out.code;
+
+    // Persist the map + append sourceMappingURL only when --out-map is requested.
+    if let (Some(out_map_path), Some(map_json)) = (&cli.out_map, &out.map) {
+        fs::write(out_map_path, map_json)?;
+        let basename = basename(out_map_path);
+        if !code.ends_with('\n') {
+            code.push('\n');
+        }
+        code.push_str(&format!("//# sourceMappingURL={basename}\n"));
+    }
+
+    fs::write(&cli.out, code)?;
+    Ok(())
+}
+
+fn basename(p: &Path) -> String {
+    p.file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| p.to_string_lossy().into_owned())
 }
 
 /// Accept GCC-canonical `-O<level>` tokens (`-O0`/`-O1`/`-O2`/`-O3`/`-Os`/`-Oz`,

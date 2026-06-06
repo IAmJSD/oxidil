@@ -9,8 +9,8 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use crate::level::OptLevel;
-use crate::pass::Overrides;
+use oxidil::level::OptLevel;
+use oxidil::pass::Overrides;
 
 #[derive(Parser, Debug)]
 #[command(

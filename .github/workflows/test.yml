@@ -42,6 +42,31 @@ jobs:
       - name: Run differential corpus test
         run: bash difftest/run.sh
 
+  npm-package:
+    name: npm package (wasm) build & test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust 1.96.0
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Cache cargo & target
+        uses: Swatinem/rust-cache@v2
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      # `make npm` generates the version files from Cargo.toml, then runs
+      # wasm-pack + tsc — the same build path the publish workflow uses.
+      - name: Build npm package
+        run: make npm
+      - name: Test npm package
+        working-directory: npm
+        run: npm test
+
   fmt:
     name: rustfmt
     runs-on: ubuntu-24.04

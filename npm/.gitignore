@@ -1,0 +1,8 @@
+node_modules/
+dist/
+wasm/
+*.tgz
+
+# Generated from Cargo.toml (the version source of truth) by the Makefile.
+package.json
+src/version.ts

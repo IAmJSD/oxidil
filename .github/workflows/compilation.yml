@@ -322,3 +322,53 @@ jobs:
           bodyFile: CHANGELOG.md
           tag: ${{ needs.check-if-new-release.outputs.version }}
           name: Oxidil ${{ needs.check-if-new-release.outputs.version }}
+
+  publish-to-npm:
+    name: Publish to npm
+    needs: [publish-release]
+    # x86_64 runner: wasm-pack ships prebuilt binaries for it, and the wasm
+    # artifact is host-independent anyway.
+    runs-on: ubuntu-24.04
+    permissions:
+      # OIDC trusted publishing: GitHub mints a short-lived id-token that npm
+      # exchanges for publish rights (no NPM_TOKEN secret) and uses to attach a
+      # provenance attestation. Requires npm CLI >= 11.5.1.
+      #
+      # One-time setup on npmjs.com: package "oxidil" -> Settings -> Trusted
+      # Publisher -> GitHub Actions, with repo "<owner>/oxidil" and workflow
+      # file "compilation.yml" (must match this file's name).
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust 1.96.0 (with wasm target)
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo & target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Generate versioned files from Cargo.toml
+        run: make generate
+
+      - name: Install npm dependencies
+        working-directory: npm
+        run: npm install
+
+      - name: Publish to npm via OIDC trusted publishing
+        working-directory: npm
+        # No NODE_AUTH_TOKEN: auth and provenance come from the OIDC id-token.
+        # `prepublishOnly` rebuilds the wasm + TypeScript before the tarball is
+        # created, so this publishes a freshly built package.
+        run: npm publish --access public

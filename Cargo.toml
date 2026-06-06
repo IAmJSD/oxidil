@@ -4,6 +4,20 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
+# The crate is both a library (the pure compile core, also compiled to wasm) and
+# the native `oxidil` CLI binary.
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "oxidil"
+path = "src/main.rs"
+
+[features]
+# Enable the wasm-bindgen JS bindings (src/wasm.rs). Used by the npm package.
+wasm = ["dep:wasm-bindgen"]
+
 [dependencies]
 # --- oxc front-end, all PINNED to 0.134.0 (0.134.x needs Rust >=1.94; we are on 1.96) ---
 oxc_allocator = "=0.134.0"
@@ -21,5 +35,11 @@ oxc_sourcemap = "=7.0.0"
 oxc_diagnostics = "=0.134.0"
 
 # --- non-oxc support ---
-clap = { version = "4", features = ["derive"] }
 serde_json = "1"
+
+# wasm bindings, only pulled in under the `wasm` feature.
+wasm-bindgen = { version = "0.2", optional = true }
+
+# clap is only used by the native CLI binary; keep it out of the wasm build.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+clap = { version = "4", features = ["derive"] }

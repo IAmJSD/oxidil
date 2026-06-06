@@ -362,6 +362,29 @@ cannot prove safe rather than risk a behavior change. Notable conservative gaps:
 - Every symbol-touching pass bails entirely on `with`/direct-`eval` programs.
 - BigInt and `undefined` constants are not synthesized by any folder.
 
+## npm package (WebAssembly)
+
+The compile core is also published to npm as [`oxidil`](npm/), built by compiling
+this crate to `wasm32-unknown-unknown` (via `wasm-pack`) and wrapping it in a
+typed TypeScript API + CLI. See [`npm/README.md`](npm/README.md). The pure,
+file-I/O-free core lives in [`src/driver.rs`](src/driver.rs) (`compile()`) and is
+shared by both the native binary and the WASM build; the bindings are in
+[`src/wasm.rs`](src/wasm.rs) (feature `wasm`).
+
+Build everything (native binary + npm package, publish-ready) from the repo root:
+
+```sh
+make            # = make rust + make npm
+make rust       # native release binary only
+make npm        # wasm + TypeScript package only
+make publish    # build + npm publish
+```
+
+`Cargo.toml` is the single source of truth for the version. `make` regenerates
+the gitignored `npm/package.json` (from `npm/package.tpl.json`) and
+`npm/src/version.ts` from it, so the crate, the npm package, and the CLI
+`--version` always agree.
+
 ## License
 
 [MIT](LICENSE) © 2026 Astrid Gealer

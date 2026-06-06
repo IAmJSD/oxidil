@@ -1,0 +1,50 @@
+{
+  "name": "oxidil",
+  "version": "{{VERSION}}",
+  "description": "A JavaScript/TypeScript optimizing compiler (oxc front-end), compiled to WebAssembly. Parses JS/TS, strips types, runs sound -O-gated optimization passes, and emits optimized JS + a v3 source map.",
+  "license": "MIT",
+  "type": "commonjs",
+  "bin": {
+    "oxidil": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "dist/cli.js",
+    "dist/cli.d.ts",
+    "dist/version.js",
+    "dist/version.d.ts",
+    "wasm/oxidil.js",
+    "wasm/oxidil.d.ts",
+    "wasm/oxidil_bg.wasm",
+    "wasm/oxidil_bg.wasm.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "javascript",
+    "typescript",
+    "compiler",
+    "optimizer",
+    "minify",
+    "oxc",
+    "wasm",
+    "webassembly"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build:wasm": "wasm-pack build .. --target nodejs --out-dir npm/wasm --out-name oxidil --features wasm",
+    "build:ts": "tsc -p tsconfig.json",
+    "build": "npm run build:wasm && npm run build:ts",
+    "prepublishOnly": "npm run build",
+    "test": "node --test \"dist/test/**/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}
